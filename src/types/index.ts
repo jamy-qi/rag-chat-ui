@@ -84,3 +84,18 @@ export interface Health {
   index: { ok: boolean; chunks: number; error: string | null }
   llm: { ok: boolean; model: string; base: string; error: string | null }
 }
+
+export interface InterviewGuide {
+  title: string
+  desc: string
+  topic: string
+}
+
+export interface KnowledgeMeta {
+  kbId: string
+  appName: string
+  tagline: string
+  modes: Array<'qa' | 'interview'>
+  examples: string[]
+  interviewGuides: InterviewGuide[]
+}

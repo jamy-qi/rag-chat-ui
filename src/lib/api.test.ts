@@ -1,7 +1,7 @@
 // API 层：只测请求构造与错误路径，mock fetch，不碰真网络
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fetchHealth, fetchStats, streamChat } from './api'
-import type { ChatRequest, Health, Stats } from '@/types'
+import { fetchHealth, fetchMeta, fetchStats, streamChat } from './api'
+import type { ChatRequest, Health, KnowledgeMeta, Stats } from '@/types'
 import type { StreamHandlers } from './sse.mjs'
 
 const enc = new TextEncoder()
@@ -96,6 +96,46 @@ describe('fetchHealth', () => {
   it('HTTP 非 2xx 抛带状态码的错误', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(fakeResponse({ ok: false, status: 500 })))
     await expect(fetchHealth()).rejects.toThrow('HTTP 500')
+  })
+})
+
+describe('fetchMeta', () => {
+  const meta: KnowledgeMeta = {
+    kbId: 'interview-guide',
+    appName: '面试题库问答',
+    tagline: '基于本地知识库的检索增强问答，回答附引用来源与相关度评分。',
+    modes: ['qa', 'interview'],
+    examples: ['什么是 RAG？它解决了什么问题？'],
+    interviewGuides: [
+      { title: 'RAG 专题面试', desc: '限定 03-rag-system 主题出题', topic: '03-rag-system' },
+    ],
+  }
+
+  it('GET /api/meta，成功时返回解析后的 JSON', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(fakeResponse({ json: async () => meta }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchMeta()).resolves.toEqual(meta)
+    expect(fetchMock).toHaveBeenCalledWith('/api/meta')
+  })
+
+  it('HTTP 非 2xx 抛带状态码的错误', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(fakeResponse({ ok: false, status: 500 })))
+    await expect(fetchMeta()).rejects.toThrow('HTTP 500')
+  })
+
+  it('kbId 非 string 或 modes 非数组时抛格式异常', async () => {
+    for (const bad of [
+      { ...meta, kbId: 123 },
+      { ...meta, appName: null },
+      { ...meta, modes: 'qa' },
+    ]) {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(fakeResponse({ json: async () => bad })),
+      )
+      await expect(fetchMeta()).rejects.toThrow('GET /api/meta 返回格式异常')
+    }
   })
 })
 
