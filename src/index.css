@@ -1,0 +1,243 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* 浅色主题：近白背景 + 深灰前景，primary 加深至白底对比度 ≥4.5:1 */
+    --background: 240 20% 98%;
+    --foreground: 234 26% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 234 26% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 234 26% 12%;
+    --primary: 74 90% 25%; /* 深黄绿，vs 白 ≈5.0:1 */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 16% 94%;
+    --secondary-foreground: 234 20% 25%;
+    --muted: 240 14% 94%;
+    --muted-foreground: 228 10% 40%; /* vs 背景 ≈5.9:1 */
+    --accent: 240 14% 92%;
+    --accent-foreground: 234 26% 12%;
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --warning: 32 95% 40%;
+    --warning-foreground: 30 60% 8%;
+    --border: 240 12% 88%;
+    --input: 240 12% 84%;
+    --ring: 74 90% 25%;
+    --radius: 0.625rem;
+    --sidebar-background: 240 18% 96%;
+    --sidebar-foreground: 234 26% 12%;
+    --sidebar-primary: 74 90% 25%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 14% 92%;
+    --sidebar-accent-foreground: 234 26% 12%;
+    --sidebar-border: 240 12% 88%;
+    --sidebar-ring: 74 90% 25%;
+  }
+
+  .dark {
+    /* Mineradio 式暗色 + 酸性荧光绿体系 */
+    --background: 234 33% 6%; /* #0A0B14 蓝紫近黑 */
+    --foreground: 226 27% 95%; /* #EDEFF5 近白 */
+    --card: 235 27% 10%; /* #12131F 面板 */
+    --card-foreground: 226 27% 95%;
+    --popover: 235 27% 10%;
+    --popover-foreground: 226 27% 95%;
+    --primary: 74 87% 58%; /* #C6F135 酸性荧光黄绿 */
+    --primary-foreground: 235 30% 8%; /* 深色文字 */
+    --secondary: 235 20% 14%;
+    --secondary-foreground: 228 12% 65%;
+    --muted: 235 18% 13%;
+    --muted-foreground: 228 12% 59%; /* #8A8FA3 灰蓝 */
+    --accent: 235 18% 17%;
+    --accent-foreground: 226 27% 95%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 226 27% 95%;
+    --warning: 38 92% 60%;
+    --warning-foreground: 30 60% 10%;
+    --border: 235 15% 16%; /* ≈ rgba(255,255,255,0.08) 的实色近似 */
+    --input: 235 15% 18%;
+    --ring: 74 87% 58%;
+    --sidebar-background: 236 30% 8%;
+    --sidebar-foreground: 226 27% 95%;
+    --sidebar-primary: 74 87% 58%;
+    --sidebar-primary-foreground: 235 30% 8%;
+    --sidebar-accent: 235 18% 15%;
+    --sidebar-accent-foreground: 226 27% 95%;
+    --sidebar-border: 235 15% 14%;
+    --sidebar-ring: 74 87% 58%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  .dark body {
+    /* 扫描线纹理 + 右上角径向荧光微光（仅暗色） */
+    background-image:
+      radial-gradient(640px 420px at 88% -8%, rgba(198, 241, 53, 0.07), transparent 70%),
+      repeating-linear-gradient(
+        0deg,
+        rgba(255, 255, 255, 0.018) 0px,
+        rgba(255, 255, 255, 0.018) 1px,
+        transparent 1px,
+        transparent 3px
+      );
+    background-attachment: fixed;
+  }
+  ::selection {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+}
+
+/* 滚动条：细、低对比（浅色用深色半透明 thumb） */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(30, 33, 50, 0.25);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(30, 33, 50, 0.4);
+}
+[data-slot='scroll-area-thumb'] {
+  background: rgba(30, 33, 50, 0.3) !important;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(138, 143, 163, 0.22);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(138, 143, 163, 0.38);
+}
+.dark [data-slot='scroll-area-thumb'] {
+  background: rgba(138, 143, 163, 0.28) !important;
+}
+
+/* Top-K 滑块：荧光绿填充；发光仅暗色（浅色白底上效果差） */
+[data-slot='slider-thumb'] {
+  background: hsl(var(--primary));
+  border-color: hsl(var(--primary));
+}
+.dark [data-slot='slider-thumb'] {
+  box-shadow: 0 0 8px rgba(198, 241, 53, 0.55);
+}
+
+/* 荧光绿柔和外发光（Logo 色块、主按钮等关键处，仅暗色） */
+.dark .glow-primary {
+  box-shadow: 0 0 16px rgba(198, 241, 53, 0.35);
+}
+.dark .glow-primary-sm {
+  box-shadow: 0 0 10px rgba(198, 241, 53, 0.28);
+}
+
+/* Mineradio 式辅助标签：小号大写英文 + 超宽字距 */
+.mr-label {
+  font-size: 10px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+  font-weight: 500;
+}
+
+/* Markdown 渲染样式（AI 回答气泡内，双主题走语义变量） */
+.markdown-body {
+  line-height: 1.7;
+  word-break: break-word;
+  color: hsl(var(--foreground));
+}
+.markdown-body > *:first-child { margin-top: 0; }
+.markdown-body > *:last-child { margin-bottom: 0; }
+.markdown-body p { margin: 0.5em 0; }
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  margin: 0.8em 0 0.4em;
+  font-weight: 700;
+  line-height: 1.4;
+  color: hsl(var(--foreground));
+}
+.markdown-body h1 { font-size: 1.15em; }
+.markdown-body h2 { font-size: 1.1em; }
+.markdown-body h3 { font-size: 1.05em; }
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0.5em 0;
+  padding-left: 1.4em;
+}
+.markdown-body ul { list-style: disc; }
+.markdown-body ol { list-style: decimal; }
+.markdown-body li { margin: 0.2em 0; }
+.markdown-body li::marker { color: hsl(var(--primary)); }
+.markdown-body strong { color: hsl(var(--foreground)); }
+.markdown-body code {
+  border-radius: 4px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--muted));
+  padding: 0.15em 0.35em;
+  font-size: 0.88em;
+  color: hsl(74 60% 24%); /* 浅色：深色绿，vs muted 底 ≈5.6:1 */
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.dark .markdown-body code {
+  border-color: rgba(198, 241, 53, 0.18);
+  background: hsl(235 25% 14%);
+  color: hsl(74 60% 72%); /* 暗色：荧光绿 */
+}
+.markdown-body pre {
+  margin: 0.6em 0;
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--muted));
+  padding: 0.8em 1em;
+}
+.dark .markdown-body pre {
+  border-color: rgba(255, 255, 255, 0.07);
+  background: hsl(236 33% 7%);
+}
+.markdown-body pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: hsl(var(--foreground));
+  font-size: 0.85em;
+}
+.markdown-body blockquote {
+  margin: 0.5em 0;
+  border-left: 3px solid hsl(var(--primary));
+  padding-left: 0.8em;
+  color: hsl(var(--muted-foreground));
+}
+.markdown-body table {
+  margin: 0.6em 0;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid hsl(var(--border));
+  padding: 0.3em 0.7em;
+}
+.markdown-body th { background: hsl(var(--muted)); }
+.markdown-body a { color: hsl(var(--primary)); text-decoration: underline; }
+.markdown-body hr { margin: 0.8em 0; border-color: hsl(var(--border)); }
+
+/* 引用锚点跳转后的短暂高亮（[n] 链接点击时加到来源卡片容器上） */
+.citation-flash {
+  border-radius: var(--radius);
+  box-shadow: 0 0 0 2px hsl(var(--primary));
+  transition: box-shadow 0.3s ease;
+}
