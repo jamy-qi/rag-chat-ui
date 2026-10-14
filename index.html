@@ -3,11 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>面试题库 RAG 问答</title>
+    <title>知识库问答</title>
     <script>
       // 防闪烁：首帧前按存储/系统偏好预设 dark class
       try {
-        var t = localStorage.getItem('rag-qa:theme')
+        var t = localStorage.getItem('rag-chat-ui:theme')
         if (t !== 'light' && t !== 'dark') {
           t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
         }

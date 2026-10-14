@@ -1,7 +1,8 @@
 // 主题管理：localStorage 持久化 + 系统偏好回退 + html.dark class 切换
 export type Theme = 'light' | 'dark'
-const THEME_KEY = 'rag-qa:theme'
-export const THEME_CHANGED = 'rag-qa:theme-changed'
+// 主题全局共享，不随 kbId 隔离
+const THEME_KEY = 'rag-chat-ui:theme'
+export const THEME_CHANGED = 'rag-chat-ui:theme-changed'
 
 export function loadTheme(): Theme {
   try {

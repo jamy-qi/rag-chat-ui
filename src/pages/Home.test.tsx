@@ -3,13 +3,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import Home from './Home'
-import { fetchStats, streamChat } from '@/lib/api'
+import { fetchMeta, fetchStats, streamChat } from '@/lib/api'
 import { loadSessions } from '@/lib/sessions'
 import { loadMistakes } from '@/lib/mistakes'
 import { toast } from 'sonner'
 import type { ChatMessage, Health, Stats } from '@/types'
 
 vi.mock('@/lib/api', () => ({
+  // 元数据默认立即 resolve：kbId test-kb（会话/错题断言据此拼存储 key）、双模式；
+  // 需要特定 meta 的用例自行 mockResolvedValueOnce / mockRejectedValueOnce
+  fetchMeta: vi.fn(() =>
+    Promise.resolve({
+      kbId: 'test-kb',
+      appName: '测试知识库',
+      tagline: '测试标语',
+      modes: ['qa', 'interview'],
+      examples: [],
+      interviewGuides: [],
+    }),
+  ),
   // 统计信息默认永不 resolve，避免产生额外渲染；需要主题列表的用例自行 mockResolvedValueOnce
   fetchStats: vi.fn(() => Promise.withResolvers<Stats>().promise),
   fetchHealth: vi.fn(() => Promise.withResolvers<Health>().promise),
@@ -26,6 +38,7 @@ Element.prototype.scrollIntoView = vi.fn()
 
 const mockStreamChat = vi.mocked(streamChat)
 const mockFetchStats = vi.mocked(fetchStats)
+const mockFetchMeta = vi.mocked(fetchMeta)
 const mockToast = vi.mocked(toast)
 type Handlers = Parameters<typeof streamChat>[2]
 
@@ -139,7 +152,8 @@ describe('Home 请求生命周期', () => {
     render(<Home />)
     // 切到模拟面试模式（Radix Tabs 在 mouseDown 时激活）后从空状态直接开考：
     // hideUser，会话里只有 assistant 错误消息
-    fireEvent.mouseDown(screen.getByRole('tab', { name: /模拟面试/ }))
+    // Tabs 由 meta.modes 驱动，需等 meta 加载
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: /模拟面试/ }))
     fireEvent.click(await screen.findByRole('button', { name: /综合模拟面试/ }))
 
     await screen.findByText(/检索失败/)
@@ -147,7 +161,7 @@ describe('Home 请求生命周期', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: '发送' })).toBeInTheDocument(),
     )
-    expect(loadSessions()).toEqual([])
+    expect(loadSessions('test-kb')).toEqual([])
   })
 
   it('重试绑定原问题：q1 失败、q2 成功后，点 q1 的重试必须重发 q1', async () => {
@@ -192,12 +206,12 @@ describe('Home 请求生命周期', () => {
       requestQuestion: '刷新前的原始问题',
     }
     localStorage.setItem(
-      'rag-qa:sessions',
+      'rag-chat-ui:test-kb:sessions',
       JSON.stringify([
         { id: 's1', title: 't', mode: 'qa', topic: null, messages: [failedMsg], updatedAt: 1 },
       ]),
     )
-    localStorage.setItem('rag-qa:active-session', 's1')
+    localStorage.setItem('rag-chat-ui:test-kb:active', 's1')
     mockStreamChat.mockImplementationOnce(async (_req, _signal, handlers) => {
       handlers.onToken('恢复后重试的回答')
       handlers.onDone()
@@ -212,7 +226,7 @@ describe('Home 请求生命周期', () => {
 
   it('无 requestQuestion 且无配对用户消息的错误消息不显示重试按钮', async () => {
     localStorage.setItem(
-      'rag-qa:sessions',
+      'rag-chat-ui:test-kb:sessions',
       JSON.stringify([
         {
           id: 's1',
@@ -224,7 +238,7 @@ describe('Home 请求生命周期', () => {
         },
       ]),
     )
-    localStorage.setItem('rag-qa:active-session', 's1')
+    localStorage.setItem('rag-chat-ui:test-kb:active', 's1')
 
     render(<Home />)
     await screen.findByText('后端错误：挂了')
@@ -257,7 +271,7 @@ describe('Home 请求生命周期', () => {
 
   it('retryable:false 的错误消息不显示重试按钮', async () => {
     localStorage.setItem(
-      'rag-qa:sessions',
+      'rag-chat-ui:test-kb:sessions',
       JSON.stringify([
         {
           id: 's1',
@@ -280,16 +294,16 @@ describe('Home 请求生命周期', () => {
         },
       ]),
     )
-    localStorage.setItem('rag-qa:active-session', 's1')
+    localStorage.setItem('rag-chat-ui:test-kb:active', 's1')
 
     render(<Home />)
     await screen.findByText('后端错误：配额超限')
     expect(screen.queryByRole('button', { name: '重试' })).not.toBeInTheDocument()
   })
 
-  it('删除会话存储失败：弹错误提示，会话不移出侧栏', () => {
+  it('删除会话存储失败：弹错误提示，会话不移出侧栏', async () => {
     localStorage.setItem(
-      'rag-qa:sessions',
+      'rag-chat-ui:test-kb:sessions',
       JSON.stringify([
         {
           id: 's1',
@@ -306,17 +320,18 @@ describe('Home 请求生命周期', () => {
     })
     try {
       render(<Home />)
-      fireEvent.click(screen.getByRole('button', { name: '删除会话' }))
+      // 会话列表要等 meta 就绪后按 kbId 恢复
+      fireEvent.click(await screen.findByRole('button', { name: '删除会话' }))
       expect(mockToast.error).toHaveBeenCalledWith('删除失败：浏览器存储不可用')
       // 侧栏与存储都还在
       expect(screen.getByText('历史会话一')).toBeInTheDocument()
-      expect(loadSessions()).toHaveLength(1)
+      expect(loadSessions('test-kb')).toHaveLength(1)
     } finally {
       spy.mockRestore()
     }
   })
 
-  it('请求完成后 rag-qa:sessions 只写入一次（无双重落盘）', async () => {
+  it('请求完成后 rag-chat-ui:test-kb:sessions 只写入一次（无双重落盘）', async () => {
     const setSpy = vi.spyOn(Storage.prototype, 'setItem')
     try {
       mockStreamChat.mockImplementationOnce(async (_req, _signal, handlers) => {
@@ -328,7 +343,7 @@ describe('Home 请求生命周期', () => {
       sendQuestion('落盘计数问题')
       await screen.findByText('完整回答')
       await waitFor(() => {
-        const writes = setSpy.mock.calls.filter((c) => c[0] === 'rag-qa:sessions')
+        const writes = setSpy.mock.calls.filter((c) => c[0] === 'rag-chat-ui:test-kb:sessions')
         expect(writes).toHaveLength(1)
       })
     } finally {
@@ -344,7 +359,7 @@ describe('Home 请求生命周期', () => {
       topics: [{ name: '03-rag-system', count: 2 }],
     })
     localStorage.setItem(
-      'rag-qa:sessions',
+      'rag-chat-ui:test-kb:sessions',
       JSON.stringify([
         {
           id: 's1',
@@ -359,16 +374,16 @@ describe('Home 请求生命周期', () => {
         },
       ]),
     )
-    localStorage.setItem('rag-qa:active-session', 's1')
+    localStorage.setItem('rag-chat-ui:test-kb:active', 's1')
 
     render(<Home />)
     await screen.findByText('旧回答')
     // 仅浏览恢复不落盘：updatedAt 保持原值
-    expect(JSON.parse(localStorage.getItem('rag-qa:sessions') ?? '[]')[0].updatedAt).toBe(1)
+    expect(JSON.parse(localStorage.getItem('rag-chat-ui:test-kb:sessions') ?? '[]')[0].updatedAt).toBe(1)
 
     fireEvent.click(await screen.findByRole('button', { name: /03-rag-system/ }))
     await waitFor(() => {
-      const saved = JSON.parse(localStorage.getItem('rag-qa:sessions') ?? '[]')
+      const saved = JSON.parse(localStorage.getItem('rag-chat-ui:test-kb:sessions') ?? '[]')
       expect(saved[0].topic).toBe('03-rag-system')
       expect(saved[0].updatedAt).toBeGreaterThan(1)
     })
@@ -381,7 +396,7 @@ describe('Home 请求生命周期', () => {
       content: `内容 ${i}`,
     }))
     localStorage.setItem(
-      'rag-qa:sessions',
+      'rag-chat-ui:test-kb:sessions',
       JSON.stringify([
         {
           id: 's1',
@@ -393,7 +408,7 @@ describe('Home 请求生命周期', () => {
         },
       ]),
     )
-    localStorage.setItem('rag-qa:active-session', 's1')
+    localStorage.setItem('rag-chat-ui:test-kb:active', 's1')
     mockStreamChat.mockImplementationOnce(async () => {})
 
     render(<Home />)
@@ -425,7 +440,7 @@ describe('Home 错题手动收藏：题答配对', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '加入错题本' }))
 
-    const saved = loadMistakes()
+    const saved = loadMistakes('test-kb')
     expect(saved).toHaveLength(1)
     expect(saved[0].question).toBe('什么是 RAG？它解决了什么问题？')
     expect(saved[0].answer).toBe(answer)
@@ -448,7 +463,7 @@ describe('Home 错题手动收藏：题答配对', () => {
 
     render(<Home />)
     // 切到模拟面试模式（Radix Tabs 在 mouseDown 时激活）后从空状态直接开考
-    fireEvent.mouseDown(screen.getByRole('tab', { name: /模拟面试/ }))
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: /模拟面试/ }))
     fireEvent.click(await screen.findByRole('button', { name: /综合模拟面试/ }))
     await screen.findByText(/什么是 RAG？请简述其核心流程/)
     await waitFor(() =>
@@ -468,7 +483,7 @@ describe('Home 错题手动收藏：题答配对', () => {
 
     // 该回复含「正确答案」小节，流式结束时已自动收录；手动收藏必须按同一题目去重刷新，
     // 而不是把「下一题」当成新错题再存一条
-    const saved = loadMistakes()
+    const saved = loadMistakes('test-kb')
     expect(saved).toHaveLength(1)
     expect(saved[0].question).toBe(question1)
     expect(saved[0].answer).toBe('### 正确答案\nRAG 是检索增强生成。\n\n### 解析\n先检索再生成。')
@@ -560,7 +575,7 @@ describe('Home 响应式布局', () => {
 describe('Home 会话恢复滚动', () => {
   it('刷新恢复会话后首次定位用 instant（auto）滚动', async () => {
     localStorage.setItem(
-      'rag-qa:sessions',
+      'rag-chat-ui:test-kb:sessions',
       JSON.stringify([
         {
           id: 's1',
@@ -575,7 +590,7 @@ describe('Home 会话恢复滚动', () => {
         },
       ]),
     )
-    localStorage.setItem('rag-qa:active-session', 's1')
+    localStorage.setItem('rag-chat-ui:test-kb:active', 's1')
     const proto = Element.prototype as unknown as { scrollIntoView?: unknown }
     const prevScroll = proto.scrollIntoView
     const scrollSpy = vi.fn()
@@ -587,5 +602,106 @@ describe('Home 会话恢复滚动', () => {
     } finally {
       proto.scrollIntoView = prevScroll
     }
+  })
+})
+
+describe('Home 元数据驱动', () => {
+  it('modes 仅 qa：顶栏与空态显示 meta.appName，无模式 Tabs/错题本/面试引导，title 同步', async () => {
+    mockFetchMeta.mockResolvedValueOnce({
+      kbId: 'docs',
+      appName: '产品文档助手',
+      tagline: '基于产品文档的智能问答',
+      modes: ['qa'],
+      examples: ['如何配置 Webhook？'],
+      interviewGuides: [],
+    })
+
+    render(<Home />)
+    // 顶栏 + 空态标题都显示应用名（sr-only 无障碍标题另算一份）
+    expect((await screen.findAllByText('产品文档助手')).length).toBeGreaterThanOrEqual(2)
+    // 空态副标题与示例卡来自 meta
+    expect(screen.getByText('基于产品文档的智能问答')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /如何配置 Webhook？/ })).toBeInTheDocument()
+    // document.title 随 appName 更新
+    await waitFor(() => expect(document.title).toBe('产品文档助手'))
+    // 无面试模式：Tabs / 错题本入口 / 面试引导全部隐藏
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /错题本/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /综合模拟面试/ })).not.toBeInTheDocument()
+  })
+
+  it('modes 含 interview：Tabs/错题本/引导卡渲染，引导卡数据来自 meta.interviewGuides', async () => {
+    mockFetchMeta.mockResolvedValueOnce({
+      kbId: 'kb-x',
+      appName: '题库助手',
+      tagline: 't',
+      modes: ['qa', 'interview'],
+      examples: [],
+      interviewGuides: [{ title: 'Rust 专题面试', desc: '限定 rust 主题出题', topic: 'rust' }],
+    })
+    mockStreamChat.mockImplementationOnce(async () => {})
+
+    render(<Home />)
+    expect(await screen.findByRole('tab', { name: /模拟面试/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /错题本/ })).toBeInTheDocument()
+
+    // 面试引导卡来自 meta.interviewGuides，点击后以该主题开考
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /模拟面试/ }))
+    const guideCard = await screen.findByText('Rust 专题面试')
+    expect(screen.getByText('限定 rust 主题出题')).toBeInTheDocument()
+    fireEvent.click(guideCard)
+    await waitFor(() => expect(mockStreamChat).toHaveBeenCalledTimes(1))
+    expect(mockStreamChat.mock.calls[0][0].mode).toBe('interview')
+    expect(mockStreamChat.mock.calls[0][0].topic).toBe('rust')
+  })
+
+  it('meta 请求失败：降级默认名「知识库问答」，可正常发送', async () => {
+    mockFetchMeta.mockRejectedValueOnce(new Error('网络错误'))
+    mockStreamChat.mockImplementationOnce(async (_req, _signal, handlers) => {
+      handlers.onToken('降级路径的回答')
+      handlers.onDone()
+    })
+
+    render(<Home />)
+    expect((await screen.findAllByText('知识库问答')).length).toBeGreaterThanOrEqual(1)
+    await waitFor(() => expect(document.title).toBe('知识库问答'))
+    // 默认 modes ['qa']：无 Tabs，可直接提问
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
+    sendQuestion('降级后还能问吗')
+    await screen.findByText('降级路径的回答')
+    expect(mockStreamChat).toHaveBeenCalledTimes(1)
+    expect(mockStreamChat.mock.calls[0][0].mode).toBe('qa')
+  })
+
+  it('modes 不含 interview 时，恢复的 interview 会话被强制回 qa', async () => {
+    mockFetchMeta.mockResolvedValueOnce({
+      kbId: 'docs',
+      appName: '文档助手',
+      tagline: '',
+      modes: ['qa'],
+      examples: [],
+      interviewGuides: [],
+    })
+    localStorage.setItem(
+      'rag-chat-ui:docs:sessions',
+      JSON.stringify([
+        {
+          id: 's1',
+          title: 't',
+          mode: 'interview',
+          topic: null,
+          messages: [{ id: 'a1', role: 'assistant', content: '面试官的历史问题' }],
+          updatedAt: 1,
+        },
+      ]),
+    )
+    localStorage.setItem('rag-chat-ui:docs:active', 's1')
+
+    render(<Home />)
+    await screen.findByText('面试官的历史问题')
+    // qa 模式输入占位符（interview 是「输入你的回答」）
+    expect(
+      screen.getByPlaceholderText('输入你的问题（Enter 发送，Shift+Enter 换行）'),
+    ).toBeInTheDocument()
   })
 })

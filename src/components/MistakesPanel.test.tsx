@@ -33,13 +33,13 @@ beforeEach(() => {
 
 describe('MistakesPanel', () => {
   it('空列表显示友好空状态', () => {
-    render(<MistakesPanel open onOpenChange={noop} mistakes={[]} onRetry={noop} />)
+    render(<MistakesPanel open onOpenChange={noop} kbId="kb1" mistakes={[]} onRetry={noop} />)
     expect(screen.getByText('错题本还是空的')).toBeInTheDocument()
     expect(screen.getByText(/模拟面试中答错或表示不会的题会自动收录/)).toBeInTheDocument()
   })
 
   it('列表项显示题目 / 综合标签（topic=null）/ 复习次数，答案默认折叠', () => {
-    render(<MistakesPanel open onOpenChange={noop} mistakes={[sample]} onRetry={noop} />)
+    render(<MistakesPanel open onOpenChange={noop} kbId="kb1" mistakes={[sample]} onRetry={noop} />)
     expect(screen.getByText('什么是 RAG？')).toBeInTheDocument()
     // 「综合」同时出现在主题徽标和筛选下拉选项里
     expect(screen.getAllByText('综合').length).toBeGreaterThan(0)
@@ -48,7 +48,7 @@ describe('MistakesPanel', () => {
   })
 
   it('点击「显示答案」展开，无答案时显示占位文案', () => {
-    render(<MistakesPanel open onOpenChange={noop} mistakes={[sample]} onRetry={noop} />)
+    render(<MistakesPanel open onOpenChange={noop} kbId="kb1" mistakes={[sample]} onRetry={noop} />)
     fireEvent.click(screen.getByText('显示答案'))
     expect(screen.getByText('（未记录答案）')).toBeInTheDocument()
     // 再点一次收起
@@ -58,7 +58,7 @@ describe('MistakesPanel', () => {
 
   it('「再考我一次」把该错题交给 onRetry 回调', () => {
     const onRetry = vi.fn()
-    render(<MistakesPanel open onOpenChange={noop} mistakes={[sample]} onRetry={onRetry} />)
+    render(<MistakesPanel open onOpenChange={noop} kbId="kb1" mistakes={[sample]} onRetry={onRetry} />)
     fireEvent.click(screen.getByText('再考我一次'))
     expect(onRetry).toHaveBeenCalledTimes(1)
     expect(onRetry).toHaveBeenCalledWith(sample)
@@ -69,7 +69,7 @@ describe('MistakesPanel', () => {
       sample,
       { ...sample, id: 'm2', question: '什么是 Temperature？', topic: '03-rag-system' },
     ]
-    render(<MistakesPanel open onOpenChange={noop} mistakes={list} onRetry={noop} />)
+    render(<MistakesPanel open onOpenChange={noop} kbId="kb1" mistakes={list} onRetry={noop} />)
     const select = screen.getByLabelText('按主题筛选')
     fireEvent.change(select, { target: { value: 'none' } })
     expect(screen.getByText('什么是 RAG？')).toBeInTheDocument()
@@ -84,7 +84,7 @@ describe('MistakesPanel', () => {
       throw new DOMException('存储已满', 'QuotaExceededError')
     })
     try {
-      render(<MistakesPanel open onOpenChange={noop} mistakes={[sample]} onRetry={noop} />)
+      render(<MistakesPanel open onOpenChange={noop} kbId="kb1" mistakes={[sample]} onRetry={noop} />)
       fireEvent.click(screen.getByRole('button', { name: '已掌握' }))
       expect(mockToast.error).toHaveBeenCalledWith('删除失败：浏览器存储不可用')
       expect(mockToast.success).not.toHaveBeenCalled()
@@ -98,7 +98,7 @@ describe('MistakesPanel', () => {
       throw new DOMException('存储已满', 'QuotaExceededError')
     })
     try {
-      render(<MistakesPanel open onOpenChange={noop} mistakes={[sample]} onRetry={noop} />)
+      render(<MistakesPanel open onOpenChange={noop} kbId="kb1" mistakes={[sample]} onRetry={noop} />)
       fireEvent.click(screen.getByRole('button', { name: '还不熟' }))
       expect(mockToast.error).toHaveBeenCalledWith('保存失败：浏览器存储不可用')
       expect(mockToast).not.toHaveBeenCalled()

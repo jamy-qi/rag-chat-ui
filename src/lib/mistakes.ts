@@ -1,15 +1,18 @@
 import type { Mistake } from '@/types'
 import type { PersistResult } from './sessions'
+import { storageKey } from './sessions'
 
-const MISTAKES_KEY = 'rag-qa:mistakes'
 export const MAX_MISTAKES = 100
 
-/** 错题本变化时派发的事件名（供徽标计数等订阅刷新） */
-export const MISTAKES_CHANGED = 'rag-qa:mistakes-changed'
+/** 错题本变化时派发的事件名（供徽标计数等订阅刷新；存储 key 按 kbId 隔离，事件页内唯一即可） */
+export const MISTAKES_CHANGED = 'rag-chat-ui:mistakes-changed'
 
-export function loadMistakes(): Mistake[] {
+/** 未拿到 meta.kbId 时的兜底命名空间（与 sessions.ts 保持一致） */
+const DEFAULT_KB_ID = 'default'
+
+export function loadMistakes(kbId: string = DEFAULT_KB_ID): Mistake[] {
   try {
-    const raw = localStorage.getItem(MISTAKES_KEY)
+    const raw = localStorage.getItem(storageKey('mistakes', kbId))
     if (!raw) return []
     const list = JSON.parse(raw) as Mistake[]
     if (!Array.isArray(list)) return []
@@ -21,12 +24,12 @@ export function loadMistakes(): Mistake[] {
   }
 }
 
-function persist(list: Mistake[]): PersistResult<Mistake> {
+function persist(list: Mistake[], kbId: string): PersistResult<Mistake> {
   const sorted = [...list].sort((a, b) => b.createdAt - a.createdAt)
   const trimmed = sorted.slice(0, MAX_MISTAKES) // 容量保护：最多 100 条，删最旧
   let ok = true
   try {
-    localStorage.setItem(MISTAKES_KEY, JSON.stringify(trimmed))
+    localStorage.setItem(storageKey('mistakes', kbId), JSON.stringify(trimmed))
   } catch {
     // 存储满等异常：不阻塞聊天，但必须让调用方知道写入失败
     ok = false
@@ -62,11 +65,11 @@ export interface AddMistakeResult {
  * 并在新 answer 非空时覆盖旧 answer。topic 总是以新值为准
  * （允许重复收藏把主题改回 null「综合」）。
  */
-export function addMistake(input: AddMistakeInput): AddMistakeResult {
+export function addMistake(input: AddMistakeInput, kbId: string = DEFAULT_KB_ID): AddMistakeResult {
   const question = normalizeQuestion(input.question)
   const answer = input.answer.trim()
   const now = Date.now()
-  const loaded = loadMistakes()
+  const loaded = loadMistakes(kbId)
   const existing = loaded.find((m) => normalizeQuestion(m.question) === question)
 
   if (existing) {
@@ -77,7 +80,7 @@ export function addMistake(input: AddMistakeInput): AddMistakeResult {
       createdAt: now,
       reviewCount: existing.reviewCount + 1,
     }
-    const { list, ok } = persist([updated, ...loaded.filter((m) => m.id !== existing.id)])
+    const { list, ok } = persist([updated, ...loaded.filter((m) => m.id !== existing.id)], kbId)
     return { list, mistake: updated, isNew: false, ok }
   }
 
@@ -92,21 +95,25 @@ export function addMistake(input: AddMistakeInput): AddMistakeResult {
     createdAt: now,
     reviewCount: 0,
   }
-  const { list, ok } = persist([mistake, ...loaded])
+  const { list, ok } = persist([mistake, ...loaded], kbId)
   return { list, mistake, isNew: true, ok }
 }
 
-export function removeMistake(id: string): PersistResult<Mistake> {
-  return persist(loadMistakes().filter((m) => m.id !== id))
+export function removeMistake(id: string, kbId: string = DEFAULT_KB_ID): PersistResult<Mistake> {
+  return persist(
+    loadMistakes(kbId).filter((m) => m.id !== id),
+    kbId,
+  )
 }
 
 /** 「还不熟」：复习次数 +1，更新 lastReviewAt */
-export function markReview(id: string): PersistResult<Mistake> {
+export function markReview(id: string, kbId: string = DEFAULT_KB_ID): PersistResult<Mistake> {
   const now = Date.now()
   return persist(
-    loadMistakes().map((m) =>
+    loadMistakes(kbId).map((m) =>
       m.id === id ? { ...m, reviewCount: m.reviewCount + 1, lastReviewAt: now } : m,
     ),
+    kbId,
   )
 }
 

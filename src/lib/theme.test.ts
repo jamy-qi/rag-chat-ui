@@ -38,16 +38,16 @@ describe('loadTheme', () => {
 
   it('有效存储值优先于系统偏好', () => {
     stubSystemTheme(true)
-    localStorage.setItem('rag-qa:theme', 'light')
+    localStorage.setItem('rag-chat-ui:theme', 'light')
     expect(loadTheme()).toBe('light')
     stubSystemTheme(false)
-    localStorage.setItem('rag-qa:theme', 'dark')
+    localStorage.setItem('rag-chat-ui:theme', 'dark')
     expect(loadTheme()).toBe('dark')
   })
 
   it('非法存储值回退到系统偏好', () => {
     stubSystemTheme(true)
-    localStorage.setItem('rag-qa:theme', 'neon')
+    localStorage.setItem('rag-chat-ui:theme', 'neon')
     expect(loadTheme()).toBe('dark')
   })
 
@@ -87,16 +87,16 @@ describe('applyTheme', () => {
   it('persist:false（启动路径）只切 class 不写存储', () => {
     applyTheme('dark', { persist: false })
     expect(document.documentElement.classList.contains('dark')).toBe(true)
-    expect(localStorage.getItem('rag-qa:theme')).toBeNull()
+    expect(localStorage.getItem('rag-chat-ui:theme')).toBeNull()
     // 系统偏好不被固化：下次 loadTheme 仍跟随系统
     stubSystemTheme(false)
     expect(loadTheme()).toBe('light')
   })
 
   it('persist:false 覆盖既有存储时也不改写', () => {
-    localStorage.setItem('rag-qa:theme', 'light')
+    localStorage.setItem('rag-chat-ui:theme', 'light')
     applyTheme('dark', { persist: false })
-    expect(localStorage.getItem('rag-qa:theme')).toBe('light')
+    expect(localStorage.getItem('rag-chat-ui:theme')).toBe('light')
   })
 })
 

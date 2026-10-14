@@ -11,7 +11,8 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        // 可用 VITE_API_TARGET 指向其他兼容后端（如 mock server）
+        target: process.env.VITE_API_TARGET ?? 'http://localhost:8000',
         changeOrigin: true,
       },
     },

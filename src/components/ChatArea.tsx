@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Send,
   Square,
@@ -10,29 +11,17 @@ import {
   Play,
   Sparkles,
   Database,
-  SlidersHorizontal,
   ShieldAlert,
   Network,
   Layers,
 } from 'lucide-react'
 import { MessageItem } from '@/components/MessageItem'
 import { retryQuestionOf } from '@/lib/sessions'
-import { prefersReducedMotion, shouldPin } from '@/lib/utils'
-import type { ChatMessage, Mode, StreamPhase } from '@/types'
+import { cn, prefersReducedMotion, shouldPin } from '@/lib/utils'
+import type { ChatMessage, KnowledgeMeta, Mode, StreamPhase } from '@/types'
 
-/** qa 模式示例问题：取自知识库真实内容（03-rag-system / 02-prompt-engineering 等主题） */
-const QA_EXAMPLES = [
-  { icon: Database, text: '什么是 RAG？它解决了什么问题？' },
-  { icon: SlidersHorizontal, text: 'Temperature、Top-P、Top-K 怎么调？' },
-  { icon: ShieldAlert, text: '什么是 Prompt Injection？如何防御？' },
-  { icon: Network, text: 'Transformer 的自注意力机制是怎么工作的？' },
-] as const
-
-/** interview 模式引导卡：点击切到面试模式、选中主题并直接开考 */
-const INTERVIEW_GUIDES = [
-  { icon: Database, title: 'RAG 专题面试', desc: '限定 03-rag-system 主题出题', topic: '03-rag-system' },
-  { icon: Layers, title: 'Transformer 专题面试', desc: '限定 04-transformer-architecture 主题', topic: '04-transformer-architecture' },
-] as const
+/** 空态示例卡/引导卡图标：meta 不带图标字段，按序号轮换这组通用图标 */
+const CARD_ICONS = [MessageSquare, Database, Sparkles, Network, ShieldAlert, Layers] as const
 
 /** 流式阶段提示：sse status 事件阶段 → 首 token 到达前展示的文案 */
 const STAGE_HINT: Record<StreamPhase, string> = {
@@ -49,6 +38,10 @@ interface ChatAreaProps {
   sendState: 'idle' | StreamPhase
   /** 当前会话 id：切换/恢复会话时重置滚动吸附并用 instant 定位到底部 */
   sessionId: string | null
+  /** 知识库元数据：驱动空态品牌/示例卡/引导卡；null = 加载中（空态显示骨架） */
+  meta: KnowledgeMeta | null
+  /** 当前知识库 id：透传给 MessageItem 用于错题按 kbId 隔离存储 */
+  kbId: string
   mode: Mode
   topic: string | null
   input: string
@@ -70,6 +63,8 @@ export function ChatArea({
   streamingId,
   sendState,
   sessionId,
+  meta,
+  kbId,
   mode,
   topic,
   input,
@@ -150,6 +145,7 @@ export function ChatArea({
   }
 
   const empty = messages.length === 0
+  const hasInterview = meta?.modes.includes('interview') ?? false
 
   // 面试模式：最后一条是 AI 出题/点评且不在生成中时，显示「不会，看答案解析」快捷按钮
   const last = messages[messages.length - 1]
@@ -161,86 +157,116 @@ export function ChatArea({
       <ScrollArea className="min-h-0 flex-1">
         <div className="mx-auto max-w-3xl px-4 py-6">
           {empty ? (
+            meta === null ? (
+              /* meta 加载中：品牌/示例/引导卡全部来自 meta，先渲染骨架避免闪烁默认内容 */
+              <div
+                className="flex flex-col items-center gap-6 pt-14"
+                aria-label="知识库信息加载中"
+              >
+                <Skeleton className="h-7 w-44" />
+                <Skeleton className="h-4 w-72" />
+                <div className="grid w-full max-w-xl gap-3 sm:grid-cols-2">
+                  <Skeleton className="h-24 w-full" />
+                  <Skeleton className="h-24 w-full" />
+                </div>
+              </div>
+            ) : (
             <div className="flex flex-col items-center gap-8 pt-14 text-center">
               {/* 与 TopBar 重复的可见标题已移除，保留无障碍标题 */}
-              <h1 className="sr-only">面试题库问答</h1>
+              <h1 className="sr-only">{meta.appName}</h1>
               <div>
-                <p className="mr-label mb-4">RAG · INTERVIEW BANK</p>
-                <p className="text-sm text-muted-foreground">
-                  基于本地知识库的检索增强问答，回答附引用来源与相关度评分。
-                </p>
+                <p className="text-lg font-bold tracking-tight text-foreground">{meta.appName}</p>
+                {meta.tagline && (
+                  <p className="mt-2 text-sm text-muted-foreground">{meta.tagline}</p>
+                )}
               </div>
-              <div className="grid w-full max-w-xl gap-3 sm:grid-cols-2">
+              {/* 模式简介卡：面试卡仅知识库支持面试模式时展示 */}
+              <div className={cn('grid w-full max-w-xl gap-3', hasInterview && 'sm:grid-cols-2')}>
                 <div className="rounded-xl border border-border bg-card p-5 text-left transition-colors duration-200 hover:border-primary/50">
                   <div className="flex items-center gap-2 font-semibold text-foreground">
                     <MessageSquare className="h-4 w-4 text-primary" />
                     问答模式
                   </div>
                   <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                    直接提问面试知识点，系统从题库检索相关分块并生成带引用的回答。点击左侧主题可快速填入提问。
+                    直接提问，系统从知识库检索相关内容并生成带引用的回答。点击左侧主题可快速填入提问。
                   </p>
                 </div>
-                <div className="rounded-xl border border-border bg-card p-5 text-left transition-colors duration-200 hover:border-primary/50">
-                  <div className="flex items-center gap-2 font-semibold text-foreground">
-                    <GraduationCap className="h-4 w-4 text-primary" />
-                    模拟面试模式
+                {hasInterview && (
+                  <div className="rounded-xl border border-border bg-card p-5 text-left transition-colors duration-200 hover:border-primary/50">
+                    <div className="flex items-center gap-2 font-semibold text-foreground">
+                      <GraduationCap className="h-4 w-4 text-primary" />
+                      模拟面试模式
+                    </div>
+                    <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                      系统扮演面试官出题，你作答后会得到点评并进入下一题。可先在左侧选择主题限定出题范围。
+                    </p>
                   </div>
-                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                    系统扮演面试官出题，你作答后会得到点评并进入下一题。可先在左侧选择主题限定出题范围。
-                  </p>
-                </div>
+                )}
               </div>
               {mode === 'qa' ? (
-                /* 示例问题卡：点击即填入并发送（参考 ChatGPT starter cards）；移动优先单列 */
-                <div className="w-full max-w-xl">
-                  <p className="mr-label mb-3 flex items-center justify-center gap-1.5">
-                    <Sparkles className="h-3 w-3" />
-                    试试这些问题
-                  </p>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {QA_EXAMPLES.map(({ icon: Icon, text }) => (
-                      <button
-                        key={text}
-                        type="button"
-                        onClick={() => sendWithPin(text)}
-                        className="flex items-center gap-2.5 rounded-xl border border-border bg-card p-4 text-left text-sm text-muted-foreground transition-colors duration-200 hover:border-primary/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                      >
-                        <Icon className="h-4 w-4 shrink-0 text-primary" />
-                        {text}
-                      </button>
-                    ))}
+                meta.examples.length > 0 && (
+                  /* 示例问题卡（meta.examples）：点击即填入并发送；移动优先单列 */
+                  <div className="w-full max-w-xl">
+                    <p className="mr-label mb-3 flex items-center justify-center gap-1.5">
+                      <Sparkles className="h-3 w-3" />
+                      试试这些问题
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {meta.examples.map((text, i) => {
+                        const Icon = CARD_ICONS[i % CARD_ICONS.length]
+                        return (
+                          <button
+                            key={text}
+                            type="button"
+                            onClick={() => sendWithPin(text)}
+                            className="flex items-center gap-2.5 rounded-xl border border-border bg-card p-4 text-left text-sm text-muted-foreground transition-colors duration-200 hover:border-primary/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                          >
+                            <Icon className="h-4 w-4 shrink-0 text-primary" />
+                            {text}
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
-                </div>
+                )
               ) : (
-                /* 面试引导卡：点击切模式 + 选主题 + 直接开考；移动优先单列 */
-                <div className="flex w-full max-w-xl flex-col items-center gap-3">
-                  <div className="grid w-full gap-3 sm:grid-cols-2">
-                    {INTERVIEW_GUIDES.map(({ icon: Icon, title, desc, topic: t }) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => onStartTopicInterview(t)}
-                        className="rounded-xl border border-border bg-card p-4 text-left transition-colors duration-200 hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                      >
-                        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                          <Icon className="h-4 w-4 text-primary" />
-                          {title}
-                        </div>
-                        <p className="mt-1.5 text-xs text-muted-foreground">{desc}</p>
-                      </button>
-                    ))}
+                hasInterview && (
+                  /* 面试引导卡（meta.interviewGuides）：点击切模式 + 选主题 + 直接开考；移动优先单列 */
+                  <div className="flex w-full max-w-xl flex-col items-center gap-3">
+                    {meta.interviewGuides.length > 0 && (
+                      <div className="grid w-full gap-3 sm:grid-cols-2">
+                        {meta.interviewGuides.map((g, i) => {
+                          const Icon = CARD_ICONS[i % CARD_ICONS.length]
+                          return (
+                            <button
+                              key={g.topic}
+                              type="button"
+                              onClick={() => onStartTopicInterview(g.topic)}
+                              className="rounded-xl border border-border bg-card p-4 text-left transition-colors duration-200 hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                            >
+                              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                                <Icon className="h-4 w-4 text-primary" />
+                                {g.title}
+                              </div>
+                              <p className="mt-1.5 text-xs text-muted-foreground">{g.desc}</p>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                    <Button
+                      size="lg"
+                      onClick={onStartInterview}
+                      className="glow-primary h-11 rounded-full px-8 font-semibold transition-all duration-200 hover:brightness-110"
+                    >
+                      <Play className="mr-2 h-4 w-4" />
+                      综合模拟面试（不限主题）
+                    </Button>
                   </div>
-                  <Button
-                    size="lg"
-                    onClick={onStartInterview}
-                    className="glow-primary h-11 rounded-full px-8 font-semibold transition-all duration-200 hover:brightness-110"
-                  >
-                    <Play className="mr-2 h-4 w-4" />
-                    综合模拟面试（不限主题）
-                  </Button>
-                </div>
+                )
               )}
             </div>
+            )
           ) : (
             <div className="space-y-5" role="log" aria-live="polite" aria-label="对话消息">
               {messages.map((m) => (

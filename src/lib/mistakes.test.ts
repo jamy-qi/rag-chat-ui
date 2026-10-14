@@ -175,6 +175,17 @@ describe('addMistake', () => {
     addMistake({ question: 'Q', answer: '', topic: null })
     expect(fired).toBe(1)
   })
+
+  it('不同 kbId 的错题互不可见', () => {
+    addMistake({ question: 'Q1', answer: '', topic: null }, 'kb-a')
+    addMistake({ question: 'Q2', answer: '', topic: null }, 'kb-b')
+    expect(loadMistakes('kb-a').map((m) => m.question)).toEqual(['Q1'])
+    expect(loadMistakes('kb-b').map((m) => m.question)).toEqual(['Q2'])
+    // 去重也限定在各自命名空间内
+    expect(addMistake({ question: 'Q1', answer: '', topic: null }, 'kb-b').isNew).toBe(true)
+    // 未指定 kbId 时落到 default 命名空间
+    expect(loadMistakes()).toEqual([])
+  })
 })
 
 describe('removeMistake / markReview', () => {
@@ -208,16 +219,16 @@ describe('removeMistake / markReview', () => {
 
 describe('loadMistakes 容错', () => {
   it('损坏的 JSON 返回空数组', () => {
-    localStorage.setItem('rag-qa:mistakes', '{oops')
+    localStorage.setItem('rag-chat-ui:default:mistakes', '{oops')
     expect(loadMistakes()).toEqual([])
   })
   it('非数组内容返回空数组', () => {
-    localStorage.setItem('rag-qa:mistakes', '{"a":1}')
+    localStorage.setItem('rag-chat-ui:default:mistakes', '{"a":1}')
     expect(loadMistakes()).toEqual([])
   })
   it('过滤缺字段的脏数据', () => {
     localStorage.setItem(
-      'rag-qa:mistakes',
+      'rag-chat-ui:default:mistakes',
       JSON.stringify([{ id: 'x', question: '有效' }, { noId: true }, null]),
     )
     expect(loadMistakes()).toHaveLength(1)

@@ -17,6 +17,10 @@ interface MessageItemProps {
   topic: string | null
   /** 与该消息配对的题目（QA=最近 user 消息原文；interview=被回答的题目），null 时回退到从内容提取 */
   pairedQuestion: string | null
+  /** 当前知识库 id：错题按 kbId 命名空间隔离存储 */
+  kbId: string
+  /** 知识库是否支持面试模式：错题本是面试领域功能，不支持时不渲染收藏入口 */
+  canSaveMistake: boolean
   /** 错误消息的重试回调 */
   onRetry?: (failedMsgId: string) => void
   /** 流式阶段提示（retrieving/generating/fallback 文案）；仅 streaming 且尚无内容时显示 */
@@ -50,7 +54,7 @@ const markdownComponents: Components = {
   },
 }
 
-export function MessageItem({ message, streaming, topic, pairedQuestion, onRetry, stageHint }: MessageItemProps) {
+export function MessageItem({ message, streaming, topic, pairedQuestion, kbId, canSaveMistake, onRetry, stageHint }: MessageItemProps) {
   const isUser = message.role === 'user'
   const sources = message.sources ?? []
   const [copied, setCopied] = useState(false)
@@ -65,7 +69,7 @@ export function MessageItem({ message, streaming, topic, pairedQuestion, onRetry
     }
     // QA 回答没有「正确答案」小节，整段内容就是答案
     const answer = extractAnswer(message.content) || message.content.trim()
-    const { isNew, ok } = addMistake({ question, answer, topic })
+    const { isNew, ok } = addMistake({ question, answer, topic }, kbId)
     if (!ok) {
       toast.error('保存失败：浏览器存储不可用')
       return
@@ -191,15 +195,17 @@ export function MessageItem({ message, streaming, topic, pairedQuestion, onRetry
                   <Copy className="h-3.5 w-3.5" />
                 )}
               </button>
-              <button
-                type="button"
-                onClick={handleSaveMistake}
-                title="加入错题本"
-                aria-label="加入错题本"
-                className="rounded-md p-1.5 text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-              >
-                <BookmarkPlus className="h-3.5 w-3.5" />
-              </button>
+              {canSaveMistake && (
+                <button
+                  type="button"
+                  onClick={handleSaveMistake}
+                  title="加入错题本"
+                  aria-label="加入错题本"
+                  className="rounded-md p-1.5 text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                >
+                  <BookmarkPlus className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
           )}
         </div>

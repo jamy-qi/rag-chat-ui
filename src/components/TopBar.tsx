@@ -19,6 +19,8 @@ import { cn } from '@/lib/utils'
 import type { Health, Stats } from '@/types'
 
 interface TopBarProps {
+  /** 知识库应用名（meta.appName）；null = meta 未加载，显示骨架 */
+  appName: string | null
   stats: Stats | null
   /** /api/health 结果：移动端 <md 时以此渲染健康状态圆点；null = 未拿到 */
   health: Health | null
@@ -36,7 +38,7 @@ const HEALTH_DOT: Record<Health['status'], { dot: string; label: string }> = {
   unavailable: { dot: 'bg-destructive', label: '服务状态：不可用' },
 }
 
-export function TopBar({ stats, health, statsError, k, onKChange, onOpenMobileNav }: TopBarProps) {
+export function TopBar({ appName, stats, health, statsError, k, onKChange, onOpenMobileNav }: TopBarProps) {
   const [theme, setTheme] = useState<Theme>(() => loadTheme())
 
   const toggleTheme = () => {
@@ -69,9 +71,16 @@ export function TopBar({ stats, health, statsError, k, onKChange, onOpenMobileNa
             RAG
           </span>
         </div>
-        <h1 className="hidden text-base font-bold tracking-tight whitespace-nowrap text-foreground sm:block">
-          面试题库问答
-        </h1>
+        {appName === null ? (
+          <Skeleton
+            className="hidden h-5 w-24 sm:block"
+            aria-label="应用名加载中"
+          />
+        ) : (
+          <h1 className="hidden text-base font-bold tracking-tight whitespace-nowrap text-foreground sm:block">
+            {appName}
+          </h1>
+        )}
       </div>
 
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">

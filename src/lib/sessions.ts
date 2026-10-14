@@ -1,12 +1,20 @@
 import type { ChatMessage, Mode, Session } from '@/types'
 
-const SESSIONS_KEY = 'rag-qa:sessions'
-const ACTIVE_KEY = 'rag-qa:active-session'
+/** localStorage 命名空间：rag-chat-ui:{kbId}:{kind}，不同知识库的会话/错题互不串数据 */
+export type StorageKind = 'sessions' | 'active' | 'mistakes'
+
+export function storageKey(kind: StorageKind, kbId: string): string {
+  return `rag-chat-ui:${kbId}:${kind}`
+}
+
+/** 未拿到 meta.kbId 时的兜底命名空间（meta 加载完成前不应读写，见 Home） */
+const DEFAULT_KB_ID = 'default'
+
 export const MAX_SESSIONS = 50
 
-export function loadSessions(): Session[] {
+export function loadSessions(kbId: string = DEFAULT_KB_ID): Session[] {
   try {
-    const raw = localStorage.getItem(SESSIONS_KEY)
+    const raw = localStorage.getItem(storageKey('sessions', kbId))
     if (!raw) return []
     const list = JSON.parse(raw) as Session[]
     if (!Array.isArray(list)) return []
@@ -24,11 +32,11 @@ export interface PersistResult<T> {
   ok: boolean
 }
 
-function persist(list: Session[]): PersistResult<Session> {
+function persist(list: Session[], kbId: string): PersistResult<Session> {
   const sorted = [...list].sort((a, b) => b.updatedAt - a.updatedAt)
   const trimmed = sorted.slice(0, MAX_SESSIONS) // 容量保护：最多 50 个，删最旧
   try {
-    localStorage.setItem(SESSIONS_KEY, JSON.stringify(trimmed))
+    localStorage.setItem(storageKey('sessions', kbId), JSON.stringify(trimmed))
     return { list: trimmed, ok: true }
   } catch {
     // 存储满等异常：不阻塞聊天，但必须让调用方知道写入失败
@@ -36,28 +44,32 @@ function persist(list: Session[]): PersistResult<Session> {
   }
 }
 
-export function upsertSession(session: Session): PersistResult<Session> {
-  const list = loadSessions().filter((s) => s.id !== session.id)
+export function upsertSession(session: Session, kbId: string = DEFAULT_KB_ID): PersistResult<Session> {
+  const list = loadSessions(kbId).filter((s) => s.id !== session.id)
   list.unshift(session)
-  return persist(list)
+  return persist(list, kbId)
 }
 
-export function removeSession(id: string): PersistResult<Session> {
-  return persist(loadSessions().filter((s) => s.id !== id))
+export function removeSession(id: string, kbId: string = DEFAULT_KB_ID): PersistResult<Session> {
+  return persist(
+    loadSessions(kbId).filter((s) => s.id !== id),
+    kbId,
+  )
 }
 
-export function loadActiveId(): string | null {
+export function loadActiveId(kbId: string = DEFAULT_KB_ID): string | null {
   try {
-    return localStorage.getItem(ACTIVE_KEY)
+    return localStorage.getItem(storageKey('active', kbId))
   } catch {
     return null
   }
 }
 
-export function saveActiveId(id: string | null): void {
+export function saveActiveId(id: string | null, kbId: string = DEFAULT_KB_ID): void {
   try {
-    if (id) localStorage.setItem(ACTIVE_KEY, id)
-    else localStorage.removeItem(ACTIVE_KEY)
+    const key = storageKey('active', kbId)
+    if (id) localStorage.setItem(key, id)
+    else localStorage.removeItem(key)
   } catch {
     /* ignore */
   }

@@ -20,6 +20,8 @@ import type { Mode, Session, Topic } from '@/types'
 export interface SidePanelContentProps {
   mode: Mode
   onModeChange: (mode: Mode) => void
+  /** 知识库支持的模式（meta.modes）：不含 interview 时隐藏模式 Tabs 与错题本入口 */
+  modes: Mode[]
   topics: Topic[]
   selectedTopic: string | null
   onTopicClick: (name: string) => void
@@ -41,6 +43,7 @@ const FOCUS_RING = 'focus-visible:ring-2 focus-visible:ring-ring focus-visible:o
 export function SidePanelContent({
   mode,
   onModeChange,
+  modes,
   topics,
   selectedTopic,
   onTopicClick,
@@ -52,9 +55,11 @@ export function SidePanelContent({
   mistakesCount,
   onOpenMistakes,
 }: SidePanelContentProps) {
+  const hasInterview = modes.includes('interview')
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 space-y-3 p-3">
+        {hasInterview && (
         <Tabs value={mode} onValueChange={(v) => onModeChange(v as Mode)}>
           <TabsList className="grid h-10 w-full grid-cols-2 rounded-full border border-border bg-accent p-1">
             <TabsTrigger
@@ -73,6 +78,7 @@ export function SidePanelContent({
             </TabsTrigger>
           </TabsList>
         </Tabs>
+        )}
 
         {/* 荧光绿胶囊主按钮 */}
         <Button
@@ -83,7 +89,8 @@ export function SidePanelContent({
           新对话
         </Button>
 
-        {/* 错题本入口 */}
+        {/* 错题本入口：面试领域功能，知识库无面试模式时不渲染 */}
+        {hasInterview && (
         <Button
           variant="outline"
           className="h-10 w-full rounded-full border-border bg-transparent font-semibold text-muted-foreground transition-all duration-200 hover:border-primary/60 hover:text-primary"
@@ -98,6 +105,7 @@ export function SidePanelContent({
             {mistakesCount}
           </Badge>
         </Button>
+        )}
       </div>
 
       {sessions.length > 0 && (

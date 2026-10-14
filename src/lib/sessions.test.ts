@@ -8,6 +8,7 @@ import {
   relativeTime,
   removeSession,
   saveActiveId,
+  storageKey,
   upsertSession,
 } from './sessions'
 import type { ChatMessage, Session } from '@/types'
@@ -18,6 +19,38 @@ function makeSession(id: string, updatedAt: number, messages: ChatMessage[] = []
 
 beforeEach(() => {
   localStorage.clear()
+})
+
+describe('storageKey / kbId 隔离', () => {
+  it('key 形如 rag-chat-ui:{kbId}:{kind}', () => {
+    expect(storageKey('sessions', 'kb-a')).toBe('rag-chat-ui:kb-a:sessions')
+    expect(storageKey('active', 'kb-a')).toBe('rag-chat-ui:kb-a:active')
+    expect(storageKey('mistakes', 'kb-a')).toBe('rag-chat-ui:kb-a:mistakes')
+  })
+
+  it('不同 kbId 的会话互不可见', () => {
+    upsertSession(makeSession('a', 1000), 'kb-a')
+    upsertSession(makeSession('b', 2000), 'kb-b')
+    expect(loadSessions('kb-a').map((s) => s.id)).toEqual(['a'])
+    expect(loadSessions('kb-b').map((s) => s.id)).toEqual(['b'])
+    // 未指定 kbId 时落到 default 命名空间，读不到他人数据
+    expect(loadSessions()).toEqual([])
+  })
+
+  it('removeSession 只影响指定 kbId', () => {
+    upsertSession(makeSession('a', 1000), 'kb-a')
+    upsertSession(makeSession('a', 1000), 'kb-b')
+    removeSession('a', 'kb-a')
+    expect(loadSessions('kb-a')).toEqual([])
+    expect(loadSessions('kb-b')).toHaveLength(1)
+  })
+
+  it('activeId 也按 kbId 隔离', () => {
+    saveActiveId('a', 'kb-a')
+    expect(loadActiveId('kb-a')).toBe('a')
+    expect(loadActiveId('kb-b')).toBeNull()
+    expect(loadActiveId()).toBeNull()
+  })
 })
 
 describe('upsertSession / loadSessions', () => {
@@ -50,16 +83,16 @@ describe('upsertSession / loadSessions', () => {
 
 describe('loadSessions 容错', () => {
   it('损坏的 JSON 返回空数组', () => {
-    localStorage.setItem('rag-qa:sessions', '{oops')
+    localStorage.setItem('rag-chat-ui:default:sessions', '{oops')
     expect(loadSessions()).toEqual([])
   })
   it('非数组内容返回空数组', () => {
-    localStorage.setItem('rag-qa:sessions', '42')
+    localStorage.setItem('rag-chat-ui:default:sessions', '42')
     expect(loadSessions()).toEqual([])
   })
   it('过滤缺 id/messages 的脏数据', () => {
     localStorage.setItem(
-      'rag-qa:sessions',
+      'rag-chat-ui:default:sessions',
       JSON.stringify([
         makeSession('ok', 1000),
         { id: 123, messages: [] },

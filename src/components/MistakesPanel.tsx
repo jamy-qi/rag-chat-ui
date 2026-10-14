@@ -36,6 +36,8 @@ interface MistakesPanelProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   mistakes: Mistake[]
+  /** 当前知识库 id：删除/复习标记按 kbId 命名空间写存储 */
+  kbId: string
   /** 「再考我一次」：新建 interview 会话并以该题开考 */
   onRetry: (mistake: Mistake) => void
 }
@@ -51,9 +53,11 @@ function toFilterTopic(v: TopicFilterValue): string | null | undefined {
 
 function MistakeItem({
   mistake,
+  kbId,
   onRetry,
 }: {
   mistake: Mistake
+  kbId: string
   onRetry: (mistake: Mistake) => void
 }) {
   const [showAnswer, setShowAnswer] = useState(false)
@@ -97,7 +101,7 @@ function MistakeItem({
           <button
             type="button"
             onClick={() => {
-              const { ok } = removeMistake(mistake.id)
+              const { ok } = removeMistake(mistake.id, kbId)
               if (!ok) {
                 toast.error('删除失败：浏览器存储不可用')
                 return
@@ -112,7 +116,7 @@ function MistakeItem({
           <button
             type="button"
             onClick={() => {
-              const { ok } = markReview(mistake.id)
+              const { ok } = markReview(mistake.id, kbId)
               if (!ok) {
                 toast.error('保存失败：浏览器存储不可用')
                 return
@@ -150,7 +154,7 @@ function MistakeItem({
   )
 }
 
-export function MistakesPanel({ open, onOpenChange, mistakes, onRetry }: MistakesPanelProps) {
+export function MistakesPanel({ open, onOpenChange, mistakes, kbId, onRetry }: MistakesPanelProps) {
   const [topicFilter, setTopicFilter] = useState<TopicFilterValue>('all')
   const [sortBy, setSortBy] = useState<MistakeSortBy>('recent')
 
@@ -241,7 +245,7 @@ export function MistakesPanel({ open, onOpenChange, mistakes, onRetry }: Mistake
           ) : (
             <ul className="space-y-2.5 p-4">
               {visible.map((m) => (
-                <MistakeItem key={m.id} mistake={m} onRetry={onRetry} />
+                <MistakeItem key={m.id} mistake={m} kbId={kbId} onRetry={onRetry} />
               ))}
             </ul>
           )}

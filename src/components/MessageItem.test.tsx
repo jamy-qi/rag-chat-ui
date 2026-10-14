@@ -28,7 +28,7 @@ afterEach(cleanup)
 
 describe('MessageItem 收藏错题', () => {
   it('正常收藏弹成功 toast', () => {
-    render(<MessageItem message={asstMsg} streaming={false} topic={null} pairedQuestion={null} />)
+    render(<MessageItem message={asstMsg} streaming={false} topic={null} pairedQuestion={null} kbId="kb1" canSaveMistake />)
     fireEvent.click(screen.getByRole('button', { name: '加入错题本' }))
     expect(mockToast.success).toHaveBeenCalledWith('已加入错题本')
   })
@@ -38,7 +38,7 @@ describe('MessageItem 收藏错题', () => {
       throw new DOMException('存储已满', 'QuotaExceededError')
     })
     try {
-      render(<MessageItem message={asstMsg} streaming={false} topic={null} pairedQuestion={null} />)
+      render(<MessageItem message={asstMsg} streaming={false} topic={null} pairedQuestion={null} kbId="kb1" canSaveMistake />)
       fireEvent.click(screen.getByRole('button', { name: '加入错题本' }))
       expect(mockToast.error).toHaveBeenCalledWith('保存失败：浏览器存储不可用')
       expect(mockToast.success).not.toHaveBeenCalled()
@@ -58,11 +58,11 @@ describe('MessageItem 收藏错题', () => {
         message={reviewMsg}
         streaming={false}
         topic="03-rag-system"
-        pairedQuestion="被回答的原题目"
+        pairedQuestion="被回答的原题目" kbId="kb1" canSaveMistake
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: '加入错题本' }))
-    const saved = loadMistakes()[0]
+    const saved = loadMistakes('kb1')[0]
     expect(saved.question).toBe('被回答的原题目')
     expect(saved.answer).toBe('### 正确答案\n答案内容')
     expect(saved.topic).toBe('03-rag-system')
@@ -74,20 +74,51 @@ describe('MessageItem 收藏错题', () => {
         message={asstMsg}
         streaming={false}
         topic={null}
-        pairedQuestion="用户的原始问题"
+        pairedQuestion="用户的原始问题" kbId="kb1" canSaveMistake
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: '加入错题本' }))
-    const saved = loadMistakes()[0]
+    const saved = loadMistakes('kb1')[0]
     expect(saved.question).toBe('用户的原始问题')
     expect(saved.answer).toBe('什么是 RAG？请说明它解决了什么问题。')
   })
 
   it('配对题目过短（<4 字）时弹错误且不收录', () => {
-    render(<MessageItem message={asstMsg} streaming={false} topic={null} pairedQuestion="好的" />)
+    render(<MessageItem message={asstMsg} streaming={false} topic={null} pairedQuestion="好的" kbId="kb1" canSaveMistake />)
     fireEvent.click(screen.getByRole('button', { name: '加入错题本' }))
     expect(mockToast.error).toHaveBeenCalledWith('无法识别对应题目，未收录')
-    expect(loadMistakes()).toHaveLength(0)
+    expect(loadMistakes('kb1')).toHaveLength(0)
+  })
+
+  it('canSaveMistake=false（知识库无面试模式）不渲染收藏按钮，复制按钮保留', () => {
+    render(
+      <MessageItem
+        message={asstMsg}
+        streaming={false}
+        topic={null}
+        pairedQuestion={null}
+        kbId="kb1"
+        canSaveMistake={false}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: '加入错题本' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '复制 Markdown 原文' })).toBeInTheDocument()
+  })
+
+  it('收藏写入传入 kbId 的命名空间，不污染其他知识库', () => {
+    render(
+      <MessageItem
+        message={asstMsg}
+        streaming={false}
+        topic={null}
+        pairedQuestion={null}
+        kbId="kb-x"
+        canSaveMistake
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '加入错题本' }))
+    expect(loadMistakes('kb-x')).toHaveLength(1)
+    expect(loadMistakes('kb1')).toHaveLength(0)
   })
 })
 
@@ -116,7 +147,7 @@ describe('MessageItem 引用锚点与无来源提示', () => {
 
   it('正文 [n] 渲染为指向 #source-{msgId}-{n-1} 的链接，来源卡片带对应锚点 id', () => {
     const { container } = render(
-      <MessageItem message={msgWithSources} streaming={false} topic={null} pairedQuestion={null} />,
+      <MessageItem message={msgWithSources} streaming={false} topic={null} pairedQuestion={null} kbId="kb1" canSaveMistake />,
     )
     expect(screen.getByRole('link', { name: '[1]' })).toHaveAttribute('href', '#source-a1-0')
     expect(screen.getByRole('link', { name: '[2]' })).toHaveAttribute('href', '#source-a1-1')
@@ -129,7 +160,7 @@ describe('MessageItem 引用锚点与无来源提示', () => {
 
   it('点击引用链接平滑滚动到目标卡片并加高亮 class', () => {
     const { container } = render(
-      <MessageItem message={msgWithSources} streaming={false} topic={null} pairedQuestion={null} />,
+      <MessageItem message={msgWithSources} streaming={false} topic={null} pairedQuestion={null} kbId="kb1" canSaveMistake />,
     )
     fireEvent.click(screen.getByRole('link', { name: '[1]' }))
     expect(scrollSpy).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'smooth' }))
@@ -150,7 +181,7 @@ describe('MessageItem 引用锚点与无来源提示', () => {
     })) as unknown as typeof window.matchMedia
     try {
       render(
-        <MessageItem message={msgWithSources} streaming={false} topic={null} pairedQuestion={null} />,
+        <MessageItem message={msgWithSources} streaming={false} topic={null} pairedQuestion={null} kbId="kb1" canSaveMistake />,
       )
       fireEvent.click(screen.getByRole('link', { name: '[1]' }))
       expect(scrollSpy).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'auto' }))
@@ -166,7 +197,7 @@ describe('MessageItem 引用锚点与无来源提示', () => {
       content: '参考 [原文](https://example.com/doc) 与 [1]。',
       sources: [{ title: 'RAG 介绍', text: 't1', source: 'docs/rag.md', score: 0.82 }],
     }
-    render(<MessageItem message={msg} streaming={false} topic={null} pairedQuestion={null} />)
+    render(<MessageItem message={msg} streaming={false} topic={null} pairedQuestion={null} kbId="kb1" canSaveMistake />)
     const external = screen.getByRole('link', { name: '原文' })
     expect(external).toHaveAttribute('target', '_blank')
     expect(external).toHaveAttribute('rel', expect.stringContaining('noopener'))
@@ -176,7 +207,7 @@ describe('MessageItem 引用锚点与无来源提示', () => {
 
   it('有来源时不显示「未检索到资料」提示', () => {
     render(
-      <MessageItem message={msgWithSources} streaming={false} topic={null} pairedQuestion={null} />,
+      <MessageItem message={msgWithSources} streaming={false} topic={null} pairedQuestion={null} kbId="kb1" canSaveMistake />,
     )
     expect(screen.queryByText('本次回答未检索到可用知识库资料')).not.toBeInTheDocument()
   })
@@ -184,11 +215,11 @@ describe('MessageItem 引用锚点与无来源提示', () => {
   it('无来源且回答完成时显示中性提示；流式中不显示', () => {
     const noSources: ChatMessage = { id: 'a2', role: 'assistant', content: '直接回答的内容' }
     const { rerender } = render(
-      <MessageItem message={noSources} streaming={true} topic={null} pairedQuestion={null} />,
+      <MessageItem message={noSources} streaming={true} topic={null} pairedQuestion={null} kbId="kb1" canSaveMistake />,
     )
     expect(screen.queryByText('本次回答未检索到可用知识库资料')).not.toBeInTheDocument()
     rerender(
-      <MessageItem message={noSources} streaming={false} topic={null} pairedQuestion={null} />,
+      <MessageItem message={noSources} streaming={false} topic={null} pairedQuestion={null} kbId="kb1" canSaveMistake />,
     )
     expect(screen.getByText('本次回答未检索到可用知识库资料')).toBeInTheDocument()
   })
@@ -200,7 +231,7 @@ describe('MessageItem 引用锚点与无来源提示', () => {
         message={empty}
         streaming={true}
         topic={null}
-        pairedQuestion={null}
+        pairedQuestion={null} kbId="kb1" canSaveMistake
         stageHint="正在检索知识库…"
       />,
     )
